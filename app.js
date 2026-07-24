@@ -1,8 +1,23 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { LocalStore } from "./store.js";
+import { SupabaseStore } from "./supabase-store.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
-// Swap this line for SupabaseStore later. Nothing else changes.
-const store = new LocalStore();
-window.store = store; // dev convenience: store.reset() in the console
+// Add ?local to the URL to run against localStorage with seed data.
+const USE_LOCAL = new URLSearchParams(location.search).has("local");
+
+const sb = USE_LOCAL
+  ? null
+  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,      // session survives reboots — tablet stays signed in
+        autoRefreshToken: true,    // refreshes before expiry, indefinitely
+        storage: window.localStorage,
+      },
+    });
+
+const store = USE_LOCAL ? new LocalStore() : new SupabaseStore(sb);
+window.store = store; // dev convenience
 
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
 const el = (id) => document.getElementById(id);
@@ -177,4 +192,56 @@ el("scrim").addEventListener("click", () => setPanel(false));
 
 el("back").addEventListener("click", () => { location.hash = ""; });
 
-route();
+// ---------- auth gate ----------
+
+function showLogin(show) {
+  el("login").hidden = !show;
+  el("app").hidden = show;
+}
+
+async function start() {
+  if (USE_LOCAL) {
+    showLogin(false);
+    route();
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    showLogin(false);
+    route();
+  } else {
+    showLogin(true);
+  }
+
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") {
+      showLogin(true);
+      if (unsub) { unsub(); unsub = null; }
+    }
+  });
+}
+
+el("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = el("loginBtn");
+  const err = el("loginError");
+  btn.disabled = true;
+  err.textContent = "";
+
+  const { error } = await sb.auth.signInWithPassword({
+    email: el("email").value.trim(),
+    password: el("password").value,
+  });
+
+  btn.disabled = false;
+  if (error) {
+    err.textContent = "That email and password don't match an account.";
+    return;
+  }
+  el("password").value = "";
+  showLogin(false);
+  route();
+});
+
+start();
