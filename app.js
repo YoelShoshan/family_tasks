@@ -19,7 +19,7 @@ const sb = USE_LOCAL
 const store = USE_LOCAL ? new LocalStore() : new SupabaseStore(sb);
 window.store = store; // dev convenience
 
-const APP_VERSION = "0.1.2";
+const APP_VERSION = "0.1.3";
 
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
 const el = (id) => document.getElementById(id);
