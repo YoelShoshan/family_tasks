@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.9.0";
+const APP_VERSION = "0.9.1";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -91,7 +91,9 @@ document.addEventListener("click", (e) => {
 // planned (faint). Values are 3-day rolling averages so a single day doesn't
 // spike the line. Returns an SVG string.
 function trendSvg(plans, days, { w = 300, h = 60, pad = 2, axis = false } = {}) {
-  const planned = days.map((d) => plans.filter((p) => p.day === d).length);
+  const planned = days.map(
+    (d) => plans.filter((p) => p.day === d && !p.abandoned_at).length
+  );
   const done = days.map(
     (d) => plans.filter((p) => p.day === d && p.done_at).length
   );
@@ -200,13 +202,11 @@ async function renderHome() {
   el("home").innerHTML = people
     .map((p) => {
       const mine = plans.filter((x) => x.person_id === p.id);
-      const done = mine.filter((x) => x.done_at).length;
-      const total = mine.length;
-      const dots = mine
-        .map(
-          (x) =>
-            `<span class="dot ${x.done_at ? "on" : x.abandoned_at ? "gone" : ""}"></span>`
-        )
+      const active = mine.filter((x) => !x.abandoned_at); // abandoned = counted as never added
+      const done = active.filter((x) => x.done_at).length;
+      const total = active.length;
+      const dots = active
+        .map((x) => `<span class="dot ${x.done_at ? "on" : ""}"></span>`)
         .join("");
 
       const mineMonth = month.filter((x) => x.person_id === p.id);
@@ -286,7 +286,9 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
 
   const openCount = rows.filter((r) => r.state === "open").length;
   const doneCount = rows.filter((r) => r.state === "done").length;
-  el("count").textContent = rows.length ? `${doneCount} / ${rows.length}` : "";
+  const goneCount = rows.filter((r) => r.state === "gone").length;
+  const activeCount = rows.length - goneCount; // abandoned drops out of the total
+  el("count").textContent = activeCount ? `${doneCount} / ${activeCount}` : "";
 
   el("todayList").innerHTML = rows.length
     ? rows
