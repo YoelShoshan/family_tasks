@@ -19,7 +19,7 @@ const sb = USE_LOCAL
 const store = USE_LOCAL ? new LocalStore() : new SupabaseStore(sb);
 window.store = store; // dev convenience
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.1.1";
 
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
 const el = (id) => document.getElementById(id);
@@ -240,7 +240,18 @@ el("loginForm").addEventListener("submit", async (e) => {
 
   btn.disabled = false;
   if (error) {
-    err.textContent = "That email and password don't match an account.";
+    console.error("Sign-in failed:", error);
+    const msg = (error.message || "").toLowerCase();
+    if (msg.includes("not confirmed")) {
+      err.textContent =
+        "This account isn't confirmed yet. Confirm it in Supabase under Authentication → Users.";
+    } else if (msg.includes("invalid login")) {
+      err.textContent = "That email and password don't match an account.";
+    } else if (msg.includes("failed to fetch")) {
+      err.textContent = "Can't reach the server. Check SUPABASE_URL in config.js.";
+    } else {
+      err.textContent = error.message;
+    }
     return;
   }
   el("password").value = "";
