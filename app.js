@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.8.0";
+const APP_VERSION = "0.9.0";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -85,6 +85,55 @@ document.addEventListener("click", (e) => {
   if (e.target.closest(".langBtn")) toggleLang();
 });
 
+// ---------- trend chart ----------
+
+// Two stacked areas over `days`: completed (solid) and the shortfall up to
+// planned (faint). Values are 3-day rolling averages so a single day doesn't
+// spike the line. Returns an SVG string.
+function trendSvg(plans, days, { w = 300, h = 60, pad = 2, axis = false } = {}) {
+  const planned = days.map((d) => plans.filter((p) => p.day === d).length);
+  const done = days.map(
+    (d) => plans.filter((p) => p.day === d && p.done_at).length
+  );
+
+  const smooth = (arr) =>
+    arr.map((_, i) => {
+      const from = Math.max(0, i - 2);
+      const win = arr.slice(from, i + 1);
+      return win.reduce((a, b) => a + b, 0) / win.length;
+    });
+
+  const sp = smooth(planned);
+  const sd = smooth(done);
+  const peak = Math.max(...sp, 1);
+
+  const x = (i) => pad + (i / Math.max(1, days.length - 1)) * (w - pad * 2);
+  const y = (v) => h - pad - (v / peak) * (h - pad * 2);
+
+  const line = (arr) => arr.map((v, i) => `${x(i)},${y(v).toFixed(1)}`).join(" ");
+  const area = (arr) =>
+    `${pad},${h - pad} ${line(arr)} ${w - pad},${h - pad}`;
+
+  // shortfall band: planned on top, completed underneath, closed into a ribbon
+  const band =
+    line(sp) +
+    " " +
+    sd
+      .map((v, i) => `${x(sd.length - 1 - i)},${y(sd[sd.length - 1 - i]).toFixed(1)}`)
+      .join(" ");
+
+  const todayX = x(days.length - 1).toFixed(1);
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="trend" aria-hidden="true">
+      <polygon class="tPlanned" points="${band}"/>
+      <polygon class="tDone" points="${area(sd)}"/>
+      <polyline class="tPlannedLine" points="${line(sp)}"/>
+      <polyline class="tDoneLine" points="${line(sd)}"/>
+      ${axis ? `<line class="tNow" x1="${todayX}" y1="${pad}" x2="${todayX}" y2="${h - pad}"/>` : ""}
+    </svg>`;
+}
+
 // ---------- date helpers ----------
 
 const dayStr = (d) => d.toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
@@ -139,14 +188,14 @@ async function renderHome() {
   show("homeView");
 
   const day = today();
-  const weekAgo = addDays(day, -6);
+  const from = addDays(day, -29);
   const people = await store.listPeople();
-  const [plans, week] = await Promise.all([
+  const [plans, month] = await Promise.all([
     store.listDayPlan(day),
-    store.listDayPlanRange(weekAgo, day),
+    store.listDayPlanRange(from, day),
   ]);
 
-  const days7 = Array.from({ length: 7 }, (_, i) => addDays(weekAgo, i));
+  const days30 = Array.from({ length: 30 }, (_, i) => addDays(from, i));
 
   el("home").innerHTML = people
     .map((p) => {
@@ -160,20 +209,17 @@ async function renderHome() {
         )
         .join("");
 
-      const mineWeek = week.filter((x) => x.person_id === p.id && x.done_at);
-      const strip = days7
-        .map((d) => {
-          const n = mineWeek.filter((x) => x.day === d).length;
-          return `<span class="wk ${n ? "on" : ""}${d === day ? " today" : ""}"></span>`;
-        })
-        .join("");
+      const mineMonth = month.filter((x) => x.person_id === p.id);
+      const chart = mineMonth.length
+        ? trendSvg(mineMonth, days30, { w: 300, h: 46 })
+        : "";
 
       return `
         <button class="card" data-person="${p.id}" style="--c:${p.color}">
           <div class="name" dir="auto">${esc(p.name)}</div>
           <div class="count ${total ? "" : "dim"}">${done} / ${total}</div>
           <div class="dots">${total ? dots : `<span class="unplanned">${t("notPlanned")}</span>`}</div>
-          <div class="week">${strip}</div>
+          <div class="trendBox">${chart}</div>
         </button>`;
     })
     .join("");
@@ -862,6 +908,17 @@ async function renderStats(personId) {
         <div class="statNum">${bestWeek}</div>
         <div class="statLbl">${t("bestStreakless")}</div>
       </div>
+    </div>
+
+    <div class="sectionHead">${t("trendTitle")}</div>
+    <div class="trendBig">${trendSvg(
+      plans.filter((p) => p.day >= addDays(end, -29)),
+      Array.from({ length: 30 }, (_, i) => addDays(addDays(end, -29), i)),
+      { w: 340, h: 130, pad: 4 }
+    )}</div>
+    <div class="legend">
+      <span><i class="sw done"></i>${t("legendDone")}</span>
+      <span><i class="sw planned"></i>${t("legendPlanned")}</span>
     </div>
 
     <div class="sectionHead">${t("heatmapTitle")}</div>

@@ -401,13 +401,30 @@
   #manageError:empty { display: none; }
   #manageError { margin: 0; color: #ff8b9a; font-size: 14px; }
 
-  .week { grid-area: week; display: flex; gap: 4px; margin-top: 10px; }
-  .wk {
-    width: 100%; max-width: 26px; height: 5px; border-radius: 3px;
-    background: #222c38;
+  .trendBox { grid-area: week; margin-top: 10px; height: 46px; }
+  .trendBox:empty { display: none; }
+  .trend { width: 100%; height: 100%; display: block; overflow: visible; }
+  /* time runs toward the reading edge: left-to-right in LTR, right-to-left in RTL */
+  [dir="rtl"] .trend { transform: scaleX(-1); }
+  .tDone      { fill: var(--c); opacity: .55; }
+  .tPlanned   { fill: var(--c); opacity: .16; }
+  .tDoneLine  { fill: none; stroke: var(--c); stroke-width: 2;
+                stroke-linejoin: round; stroke-linecap: round;
+                vector-effect: non-scaling-stroke; }
+  .tPlannedLine { fill: none; stroke: var(--c); stroke-width: 1.5; opacity: .45;
+                  stroke-dasharray: 3 3; stroke-linejoin: round;
+                  vector-effect: non-scaling-stroke; }
+  .tNow { stroke: var(--muted); stroke-width: 1; opacity: .5; }
+
+  .trendBig { padding: 4px 18px 0; height: 150px; }
+  .legend {
+    display: flex; gap: 18px; padding: 6px 18px 0;
+    font-size: 13px; color: var(--muted);
   }
-  .wk.on { background: color-mix(in srgb, var(--c) 75%, transparent); }
-  .wk.today { box-shadow: 0 0 0 1px var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend .sw { width: 14px; height: 10px; border-radius: 3px; background: var(--c); }
+  .legend .sw.done { opacity: .55; }
+  .legend .sw.planned { opacity: .16; box-shadow: inset 0 0 0 1px var(--c); }
 
   /* ---------- rate colouring in plan panel ---------- */
   .avail.r1 { box-shadow: inset 3px 0 0 color-mix(in srgb, #22c55e 25%, transparent); }
