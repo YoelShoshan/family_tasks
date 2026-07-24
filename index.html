@@ -190,7 +190,83 @@
   .avail .plus { font-size: 24px; color: var(--c); font-weight: 700; }
   .avail.added { opacity: .35; }
 
+  /* ---------- sets in plan panel ---------- */
+  #setBar { padding: 0 16px 12px; }
+  #setBar:empty { display: none; }
+  .setLabel {
+    font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .setChip {
+    all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border-radius: 999px; margin: 0 0 6px;
+    margin-inline-end: 6px;
+    background: color-mix(in srgb, var(--c) 20%, var(--panel2));
+    border: 1px solid var(--c); font-size: 15px; font-weight: 600;
+  }
+  .setChip:active { background: var(--c); color: #fff; }
+  .setChip .n { font-size: 12px; color: var(--muted); direction: ltr; }
+  .setChip.added { opacity: .4; }
+
   /* ---------- manage ---------- */
+  .sectionHead {
+    padding: 16px 18px 8px; font-size: 13px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); font-weight: 600;
+  }
+  #setsSection { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  .setList { display: grid; gap: 6px; padding: 0 18px; }
+  .setRow { display: flex; gap: 6px; align-items: stretch; }
+  .setMain {
+    all: unset; cursor: pointer; flex: 1; display: grid; gap: 2px;
+    padding: 12px 16px; border-radius: 12px; background: var(--panel);
+  }
+  .setRow.editing .setMain { box-shadow: inset 0 0 0 2px var(--c); }
+  .setMain .title { font-size: 17px; font-weight: 600; }
+  .setMain .meta { font-size: 12px; color: var(--muted); }
+  .setRename {
+    all: unset; cursor: pointer; padding: 0 14px; border-radius: 12px;
+    background: var(--panel); font-size: 14px; color: var(--muted);
+    display: grid; place-items: center;
+  }
+  .setRename:active { background: var(--panel2); }
+  .hint { margin: 0; padding: 4px 18px 8px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .newSetRow { display: flex; gap: 8px; padding: 10px 18px 0; }
+  #newSetName {
+    flex: 1; font: inherit; color: var(--text); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    -webkit-user-select: text; user-select: text;
+  }
+  #newSetName:focus { outline: none; border-color: var(--c); }
+  #newSetBtn {
+    all: unset; cursor: pointer; padding: 12px 18px; border-radius: 12px;
+    background: var(--panel2); font-weight: 600;
+  }
+  #newSetBtn:active { background: #24303e; }
+
+  .poolMain.pick { display: flex; align-items: center; gap: 14px; }
+  .poolMain.pick .body { display: grid; gap: 2px; }
+  .poolMain.pick .tick {
+    width: 26px; height: 26px; border-radius: 8px; flex: none;
+    border: 2px solid #3a4756; position: relative;
+  }
+  .poolMain.pick.on .tick { background: var(--c); border-color: var(--c); }
+  .poolMain.pick.on .tick::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 7px; height: 12px; border: solid var(--bg);
+    border-width: 0 3px 3px 0; transform: rotate(45deg) translate(-1px, -2px);
+  }
+
+  #setDoneBar {
+    display: flex; align-items: center; gap: 12px;
+    border-top: 1px solid var(--line); background: var(--panel);
+    padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  }
+  #setDoneName { flex: 1; font-weight: 600; }
+  #setDoneBtn {
+    all: unset; cursor: pointer; padding: 14px 28px; border-radius: 12px;
+    background: var(--c); color: #fff; font-weight: 600;
+  }
+
   #poolList { flex: 1; overflow-y: auto; padding: 14px 18px 20px; display: grid; gap: 8px; align-content: start; }
   .pool { display: flex; gap: 8px; }
   .poolMain {
@@ -291,7 +367,13 @@
         <a id="manageBack" class="btn" href="#"><span class="backArrow">←</span></a>
         <span id="manageName" class="grow" dir="auto"></span>
       </div>
+      <div id="setsSection"></div>
+      <div id="poolHead" class="sectionHead" hidden></div>
       <ul id="poolList"></ul>
+      <div id="setDoneBar" hidden>
+        <span id="setDoneName" dir="auto"></span>
+        <button id="setDoneBtn" type="button"></button>
+      </div>
       <form id="taskForm">
         <input id="tTitle" type="text" dir="auto" autocomplete="off" required>
         <input id="tTags" type="text" dir="auto" autocomplete="off">
@@ -320,6 +402,7 @@
 
   <aside id="planPanel" aria-label="Available tasks">
     <h2 id="planTitle"></h2>
+    <div id="setBar"></div>
     <input id="planSearch" type="search" dir="auto" autocomplete="off">
     <div id="tagBar"></div>
     <ul id="planList"></ul>

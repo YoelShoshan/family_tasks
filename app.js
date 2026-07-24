@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.3.1";
+const APP_VERSION = "0.4.0";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -34,7 +34,8 @@ const setMyPerson = (id) => { if (!IS_WALL) localStorage.setItem(MY_PERSON, id);
 
 // ---------- language ----------
 
-let editingId = null; // referenced by applyLang, declared early
+let editingId = null;    // task being edited in the manage form
+let editingSetId = null; // set whose membership is being edited
 
 function applyLang() {
   t = makeT(lang);
@@ -62,6 +63,7 @@ function applyLang() {
   el("optRecurring").textContent = t("recurring");
   el("optGeneral").textContent = t("general");
   el("cancelEdit").textContent = t("cancel");
+  el("setDoneBtn").textContent = t("doneEditing");
   el("saveTask").textContent = editingId ? t("saveChanges") : t("addTask");
 
   [...el("tDays").querySelectorAll("label span")].forEach((s, i) => {
@@ -98,6 +100,7 @@ function route() {
     renderManage(manage[1]);
     unsub = store.subscribe(() => renderManage(manage[1], { keepInput: true }));
   } else if (person) {
+    editingSetId = null;
     setMyPerson(person[1]);
     renderPerson(person[1]);
     unsub = store.subscribe(() => renderPerson(person[1], { keepPanel: true }));
@@ -160,9 +163,10 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
   el("personName").textContent = person.name;
   el("manageLink").href = `#/manage/${personId}`;
 
-  const [tasks, plans] = await Promise.all([
+  const [tasks, plans, collections] = await Promise.all([
     store.listTasks(personId),
     store.listDayPlan(day, personId),
+    store.listCollections(personId),
   ]);
   const byId = Object.fromEntries(tasks.map((x) => [x.id, x]));
 
@@ -204,6 +208,22 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
   const eligible = tasks
     .filter((x) => !chosen.has(x.id))
     .filter((x) => x.kind === "general" || !x.weekdays?.length || x.weekdays.includes(dow));
+
+  // one-tap sets: hide any whose tasks are all already on today's list
+  const usableSets = collections.filter((c) =>
+    c.task_ids.some((id) => !chosen.has(id) && byId[id])
+  );
+  el("setBar").innerHTML = usableSets.length
+    ? `<div class="setLabel">${t("collections")}</div>` +
+      usableSets
+        .map((c) => {
+          const n = c.task_ids.filter((id) => !chosen.has(id) && byId[id]).length;
+          return `<button class="setChip" data-set="${c.id}" dir="auto">${esc(
+            c.name
+          )}<span class="n">+${n}</span></button>`;
+        })
+        .join("")
+    : "";
 
   const allTags = [...new Set(eligible.flatMap((x) => x.tags || []))].sort((a, b) =>
     a.localeCompare(b, lang)
@@ -276,6 +296,13 @@ el("planList").addEventListener("click", async (e) => {
   await store.choose(today(), currentPerson(), btn.dataset.add);
 });
 
+el("setBar").addEventListener("click", async (e) => {
+  const chip = e.target.closest("[data-set]");
+  if (!chip) return;
+  chip.classList.add("added");
+  await store.applyCollection(today(), currentPerson(), chip.dataset.set);
+});
+
 el("tagBar").addEventListener("click", (e) => {
   const chip = e.target.closest("[data-tag]");
   if (!chip) return;
@@ -310,14 +337,70 @@ async function renderManage(personId, { keepInput = false } = {}) {
   el("manageName").textContent = t("manageTitle", person.name);
   el("manageBack").href = `#/p/${personId}`;
 
-  const tasks = (await store.listTasks(personId)).sort(
-    (a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title, lang)
-  );
+  const [tasks, collections] = await Promise.all([
+    store.listTasks(personId),
+    store.listCollections(personId),
+  ]);
+  tasks.sort((a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title, lang));
+
+  const editingSet = collections.find((c) => c.id === editingSetId) || null;
+  if (editingSetId && !editingSet) editingSetId = null;
+
+  // --- sets section ---
+  el("setsSection").innerHTML = `
+    <div class="sectionHead">${t("collections")}</div>
+    ${
+      collections.length
+        ? `<ul class="setList">${collections
+            .map(
+              (c) => `
+        <li class="setRow ${c.id === editingSetId ? "editing" : ""}">
+          <button class="setMain" data-setedit="${c.id}">
+            <span class="title" dir="auto">${esc(c.name)}</span>
+            <span class="meta">${t("setTasks", c.task_ids.length)}</span>
+          </button>
+          <button class="setRename" data-setrename="${c.id}">${t("renameSet")}</button>
+          <button class="poolDel" data-setdel="${c.id}" aria-label="${esc(
+                t("deleteSet")
+              )}">🗑</button>
+        </li>`
+            )
+            .join("")}</ul>`
+        : `<p class="hint">${t("noSets")}</p>`
+    }
+    <div class="newSetRow">
+      <input id="newSetName" type="text" dir="auto" autocomplete="off"
+             placeholder="${esc(t("newSetName"))}">
+      <button id="newSetBtn" type="button">${t("createSet")}</button>
+    </div>`;
+
+  // --- task pool: checkboxes when editing a set, normal rows otherwise ---
+  el("poolHead").textContent = editingSet ? t("pickForSet") : "";
+  el("poolHead").hidden = !editingSet;
+  el("taskForm").hidden = !!editingSet;
+  el("setDoneBar").hidden = !editingSet;
+  if (editingSet) el("setDoneName").textContent = editingSet.name;
+
+  const inSet = new Set(editingSet ? editingSet.task_ids : []);
 
   el("poolList").innerHTML = tasks.length
     ? tasks
-        .map(
-          (x) => `
+        .map((x) =>
+          editingSet
+            ? `
+      <li class="pool">
+        <button class="poolMain pick ${inSet.has(x.id) ? "on" : ""}"
+                data-pick="${x.id}" aria-pressed="${inSet.has(x.id)}">
+          <span class="tick" aria-hidden="true"></span>
+          <span class="body">
+            <span class="title" dir="auto">${esc(x.title)}</span>
+            <span class="meta" dir="auto">${
+              x.kind === "general" ? t("kindAnytime") : weekdayLabel(x.weekdays)
+            }</span>
+          </span>
+        </button>
+      </li>`
+            : `
       <li class="pool ${editingId === x.id ? "editing" : ""}" data-task="${x.id}">
         <button class="poolMain" data-act="edit">
           <span class="title" dir="auto">${esc(x.title)}</span>
@@ -337,6 +420,52 @@ async function renderManage(personId, { keepInput = false } = {}) {
   if (!keepInput) clearForm();
 }
 
+// ---------- sets: events ----------
+
+el("setsSection").addEventListener("click", async (e) => {
+  const personId = currentPerson();
+
+  const create = e.target.closest("#newSetBtn");
+  if (create) {
+    const input = el("newSetName");
+    const name = input.value.trim();
+    if (!name) return;
+    input.value = "";
+    await store.createCollection(personId, name);
+    return;
+  }
+
+  const edit = e.target.closest("[data-setedit]");
+  if (edit) {
+    editingSetId = edit.dataset.setedit;
+    renderManage(personId);
+    return;
+  }
+
+  const rename = e.target.closest("[data-setrename]");
+  if (rename) {
+    const cols = await store.listCollections(personId);
+    const c = cols.find((x) => x.id === rename.dataset.setrename);
+    const name = prompt(t("renameSet"), c?.name || "");
+    if (name && name.trim()) await store.renameCollection(c.id, name.trim());
+    return;
+  }
+
+  const del = e.target.closest("[data-setdel]");
+  if (del) {
+    const cols = await store.listCollections(personId);
+    const c = cols.find((x) => x.id === del.dataset.setdel);
+    if (!c || !confirm(t("confirmDeleteSet", c.name))) return;
+    if (editingSetId === c.id) editingSetId = null;
+    await store.deleteCollection(c.id);
+  }
+});
+
+el("setDoneBtn").addEventListener("click", () => {
+  editingSetId = null;
+  renderManage(currentPerson());
+});
+
 function clearForm() {
   editingId = null;
   el("tTitle").value = "";
@@ -355,6 +484,23 @@ function syncKindUI() {
 el("tKind").addEventListener("change", syncKindUI);
 
 el("poolList").addEventListener("click", async (e) => {
+  // set-membership mode
+  const pick = e.target.closest("[data-pick]");
+  if (pick) {
+    const personId = currentPerson();
+    const cols = await store.listCollections(personId);
+    const c = cols.find((x) => x.id === editingSetId);
+    if (!c) return;
+    const has = c.task_ids.includes(pick.dataset.pick);
+    const next = has
+      ? c.task_ids.filter((id) => id !== pick.dataset.pick)
+      : [...c.task_ids, pick.dataset.pick];
+    pick.classList.toggle("on", !has); // instant feedback
+    pick.setAttribute("aria-pressed", String(!has));
+    await store.setCollectionTasks(c.id, next);
+    return;
+  }
+
   const btn = e.target.closest("[data-act]");
   if (!btn) return;
   const taskId = btn.closest(".pool").dataset.task;

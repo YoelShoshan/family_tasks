@@ -11,6 +11,14 @@
 //   unchoose(planId)                   -> void
 //   setDone(planId, done)              -> plan row
 //   history(personId, fromDay, toDay)  -> [ plan rows ]
+//
+//   listCollections(personId)          -> [ {id, person_id, name, sort_order, task_ids:[]} ]
+//   createCollection(personId, name)   -> collection
+//   renameCollection(id, name)         -> collection
+//   deleteCollection(id)               -> void
+//   setCollectionTasks(id, taskIds)    -> void
+//   applyCollection(day, personId, id) -> void   (adds its tasks to that day)
+//
 //   subscribe(cb)                      -> unsubscribe fn   (cb fires on any change)
 
 const uid = () => crypto.randomUUID();
@@ -24,6 +32,8 @@ const SEED = {
   ],
   task: [],
   day_plan: [],
+  collection: [],
+  collection_task: [],
 };
 
 // give the seed people a few tasks
@@ -46,6 +56,10 @@ export class LocalStore {
     this.key = key;
     const raw = localStorage.getItem(key);
     this.db = raw ? JSON.parse(raw) : clone(SEED);
+    // tables added after this device last saved
+    for (const tbl of ["person", "task", "day_plan", "collection", "collection_task"]) {
+      if (!Array.isArray(this.db[tbl])) this.db[tbl] = [];
+    }
     this.listeners = new Set();
   }
 
@@ -129,6 +143,61 @@ export class LocalStore {
     return clone(this.db.day_plan).filter(
       (p) => p.person_id === personId && p.day >= fromDay && p.day <= toDay
     );
+  }
+
+  // ---- collections ----
+
+  async listCollections(personId) {
+    const cols = this.db.collection
+      .filter((c) => !personId || c.person_id === personId)
+      .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    return cols.map((c) => ({
+      ...clone(c),
+      task_ids: this.db.collection_task
+        .filter((ct) => ct.collection_id === c.id)
+        .map((ct) => ct.task_id),
+    }));
+  }
+
+  async createCollection(personId, name) {
+    const row = {
+      id: uid(),
+      person_id: personId,
+      name,
+      sort_order: this.db.collection.filter((c) => c.person_id === personId).length,
+      created_at: new Date().toISOString(),
+    };
+    this.db.collection.push(row);
+    this._save();
+    return { ...clone(row), task_ids: [] };
+  }
+
+  async renameCollection(id, name) {
+    const row = this.db.collection.find((c) => c.id === id);
+    row.name = name;
+    this._save();
+    return clone(row);
+  }
+
+  async deleteCollection(id) {
+    this.db.collection = this.db.collection.filter((c) => c.id !== id);
+    this.db.collection_task = this.db.collection_task.filter((ct) => ct.collection_id !== id);
+    this._save();
+  }
+
+  async setCollectionTasks(id, taskIds) {
+    this.db.collection_task = this.db.collection_task.filter((ct) => ct.collection_id !== id);
+    taskIds.forEach((task_id) =>
+      this.db.collection_task.push({ collection_id: id, task_id })
+    );
+    this._save();
+  }
+
+  async applyCollection(day, personId, collectionId) {
+    const ids = this.db.collection_task
+      .filter((ct) => ct.collection_id === collectionId)
+      .map((ct) => ct.task_id);
+    for (const taskId of ids) await this.choose(day, personId, taskId);
   }
 
   subscribe(cb) {
