@@ -2,25 +2,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { LocalStore } from "./store.js";
 import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.3.0";
 
 const params = new URLSearchParams(location.search);
-const USE_LOCAL = params.has("local"); // ?local  -> seeded localStorage, no Supabase
-const IS_WALL = params.has("wall");    // ?wall   -> tablet kiosk behaviour
+const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
+const IS_WALL = params.has("wall");    // ?wall  -> tablet kiosk behaviour
 
 const sb = USE_LOCAL
   ? null
   : createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        storage: window.localStorage,
-      },
+      auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage },
     });
 
 const store = USE_LOCAL ? new LocalStore() : new SupabaseStore(sb);
 window.store = store; // dev convenience
+
+let lang = getLang();
+let t = makeT(lang);
 
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
 const el = (id) => document.getElementById(id);
@@ -32,14 +32,61 @@ const MY_PERSON = "familyboard.me";
 const myPerson = () => (IS_WALL ? null : localStorage.getItem(MY_PERSON));
 const setMyPerson = (id) => { if (!IS_WALL) localStorage.setItem(MY_PERSON, id); };
 
+// ---------- language ----------
+
+let editingId = null; // referenced by applyLang, declared early
+
+function applyLang() {
+  t = makeT(lang);
+  document.documentElement.lang = lang;
+  document.documentElement.dir = STRINGS[lang].dir;
+
+  el("loginTitle").textContent = t("appTitle");
+  el("loginSub").textContent = t("loginSub");
+  el("email").placeholder = t("email");
+  el("password").placeholder = t("password");
+  el("loginBtn").textContent = t("signIn");
+
+  el("homeEyebrow").textContent = t("todayEyebrow");
+
+  el("back").setAttribute("aria-label", t("backToEveryone"));
+  el("manageBack").setAttribute("aria-label", t("backToBoard"));
+  el("manageLink").textContent = t("tasksBtn");
+  el("planBtn").textContent = t("planBtn");
+
+  el("planTitle").textContent = t("addToToday");
+  el("planSearch").placeholder = t("searchTasks");
+
+  el("tTitle").placeholder = t("newTask");
+  el("tTags").placeholder = t("tagsPlaceholder");
+  el("optRecurring").textContent = t("recurring");
+  el("optGeneral").textContent = t("general");
+  el("cancelEdit").textContent = t("cancel");
+  el("saveTask").textContent = editingId ? t("saveChanges") : t("addTask");
+
+  [...el("tDays").querySelectorAll("label span")].forEach((s, i) => {
+    s.textContent = t("days")[i];
+  });
+
+  [...document.querySelectorAll(".langBtn")].forEach((b) => (b.textContent = t("langBtn")));
+}
+
+function toggleLang() {
+  lang = lang === "he" ? "en" : "he";
+  setLang(lang);
+  applyLang();
+  route();
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".langBtn")) toggleLang();
+});
+
 // ---------- routing ----------
 
 let unsub = null;
-
 const VIEWS = ["homeView", "person", "manage"];
-function show(view) {
-  VIEWS.forEach((v) => (el(v).hidden = v !== view));
-}
+const show = (view) => VIEWS.forEach((v) => (el(v).hidden = v !== view));
 
 function route() {
   if (unsub) { unsub(); unsub = null; }
@@ -62,6 +109,8 @@ function route() {
 
 window.addEventListener("hashchange", route);
 
+const currentPerson = () => location.hash.match(/^#\/(?:p|manage)\/([^/]+)/)?.[1];
+
 // ---------- home ----------
 
 async function renderHome() {
@@ -79,9 +128,9 @@ async function renderHome() {
       const dots = mine.map((x) => `<span class="dot ${x.done_at ? "on" : ""}"></span>`).join("");
       return `
         <button class="card" data-person="${p.id}" style="--c:${p.color}">
-          <div class="name">${esc(p.name)}</div>
+          <div class="name" dir="auto">${esc(p.name)}</div>
           <div class="count">${total ? `${done} / ${total}` : "—"}</div>
-          <div class="dots">${total ? dots : `<span class="unplanned">Not planned yet</span>`}</div>
+          <div class="dots">${total ? dots : `<span class="unplanned">${t("notPlanned")}</span>`}</div>
         </button>`;
     })
     .join("");
@@ -95,7 +144,7 @@ el("home").addEventListener("click", (e) => {
 // ---------- person board ----------
 
 let planOpen = false;
-let tagFilter = null;   // null = show all
+let tagFilter = null;
 let planSearch = "";
 
 async function renderPerson(personId, { keepPanel = false } = {}) {
@@ -115,9 +164,8 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
     store.listTasks(personId),
     store.listDayPlan(day, personId),
   ]);
-  const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
+  const byId = Object.fromEntries(tasks.map((x) => [x.id, x]));
 
-  // --- today's list: open first, done sunk to the bottom ---
   const rows = plans
     .map((p) => ({ plan: p, task: byId[p.task_id] }))
     .filter((r) => r.task)
@@ -128,7 +176,6 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
 
   const openCount = rows.filter((r) => !r.plan.done_at).length;
   const doneCount = rows.length - openCount;
-
   el("count").textContent = rows.length ? `${doneCount} / ${rows.length}` : "";
 
   el("todayList").innerHTML = rows.length
@@ -140,65 +187,62 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
           }" data-plan="${r.plan.id}">
         <button class="toggle" data-act="toggle" aria-pressed="${!!r.plan.done_at}">
           <span class="mark" aria-hidden="true"></span>
-          <span class="title">${esc(r.task.title)}</span>
+          <span class="title" dir="auto">${esc(r.task.title)}</span>
         </button>
-        <button class="remove" data-act="remove" aria-label="Remove ${esc(
-          r.task.title
-        )} from today">✕</button>
+        <button class="remove" data-act="remove" aria-label="${esc(
+          t("removeFromToday", r.task.title)
+        )}">✕</button>
       </li>`
         )
         .join("")
-    : `<li class="empty">Nothing planned for today. Open <b>Plan</b> to pick what you'll do.</li>`;
+    : `<li class="empty">${t("emptyToday")}</li>`;
 
   // --- plan panel ---
   const chosen = new Set(plans.map((p) => p.task_id));
   const dow = new Date().getDay();
 
   const eligible = tasks
-    .filter((t) => !chosen.has(t.id))
-    .filter((t) => t.kind === "general" || !t.weekdays?.length || t.weekdays.includes(dow));
+    .filter((x) => !chosen.has(x.id))
+    .filter((x) => x.kind === "general" || !x.weekdays?.length || x.weekdays.includes(dow));
 
-  // tag chips come from what's actually available right now
-  const allTags = [...new Set(eligible.flatMap((t) => t.tags || []))].sort();
+  const allTags = [...new Set(eligible.flatMap((x) => x.tags || []))].sort((a, b) =>
+    a.localeCompare(b, lang)
+  );
   el("tagBar").innerHTML = allTags.length
-    ? `<button class="chip ${tagFilter ? "" : "on"}" data-tag="">All</button>` +
+    ? `<button class="chip ${tagFilter ? "" : "on"}" data-tag="">${t("allTags")}</button>` +
       allTags
         .map(
-          (t) =>
-            `<button class="chip ${tagFilter === t ? "on" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`
+          (x) =>
+            `<button class="chip ${tagFilter === x ? "on" : ""}" data-tag="${esc(x)}" dir="auto">${esc(x)}</button>`
         )
         .join("")
     : "";
 
   const q = planSearch.trim().toLowerCase();
   const available = eligible
-    .filter((t) => !tagFilter || (t.tags || []).includes(tagFilter))
-    .filter((t) => !q || t.title.toLowerCase().includes(q))
-    .sort((a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title));
+    .filter((x) => !tagFilter || (x.tags || []).includes(tagFilter))
+    .filter((x) => !q || x.title.toLowerCase().includes(q))
+    .sort((a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title, lang));
 
   el("planList").innerHTML = available.length
     ? available
         .map(
-          (t) => `
+          (x) => `
       <li>
-        <button class="avail" data-add="${t.id}">
+        <button class="avail" data-add="${x.id}">
           <span class="body">
-            <span class="title">${esc(t.title)}</span>
-            ${(t.tags || []).length
-              ? `<span class="tags">${(t.tags || []).map((x) => esc(x)).join(" · ")}</span>`
+            <span class="title" dir="auto">${esc(x.title)}</span>
+            ${(x.tags || []).length
+              ? `<span class="tags" dir="auto">${(x.tags || []).map(esc).join(" · ")}</span>`
               : ""}
           </span>
-          <span class="kind">${t.kind === "general" ? "anytime" : "daily"}</span>
+          <span class="kind">${x.kind === "general" ? t("kindAnytime") : t("kindDaily")}</span>
           <span class="plus" aria-hidden="true">+</span>
         </button>
       </li>`
         )
         .join("")
-    : `<li class="empty">${
-        eligible.length
-          ? "No tasks match this filter."
-          : "Everything available is already on today's list."
-      }</li>`;
+    : `<li class="empty">${eligible.length ? t("noMatch") : t("allChosen")}</li>`;
 
   setPanel(planOpen);
 }
@@ -209,8 +253,6 @@ function setPanel(open) {
   el("scrim").classList.toggle("on", open);
   el("planBtn").setAttribute("aria-expanded", String(open));
 }
-
-const currentPerson = () => location.hash.match(/^#\/(?:p|manage)\/([^/]+)/)?.[1];
 
 el("todayList").addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-act]");
@@ -252,7 +294,11 @@ el("back").addEventListener("click", () => { location.hash = ""; });
 
 // ---------- manage ----------
 
-let editingId = null;
+function weekdayLabel(w) {
+  if (!w || !w.length) return t("anyDay");
+  if (w.length === 7) return t("everyDay");
+  return w.slice().sort((a, b) => a - b).map((d) => t("days")[d]).join(" ");
+}
 
 async function renderManage(personId, { keepInput = false } = {}) {
   const people = await store.listPeople();
@@ -261,39 +307,34 @@ async function renderManage(personId, { keepInput = false } = {}) {
 
   show("manage");
   el("manage").style.setProperty("--c", person.color);
-  el("manageName").textContent = `${person.name} · tasks`;
+  el("manageName").textContent = t("manageTitle", person.name);
   el("manageBack").href = `#/p/${personId}`;
 
-  const tasks = (await store.listTasks(personId)).sort((a, b) =>
-    a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title)
+  const tasks = (await store.listTasks(personId)).sort(
+    (a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title, lang)
   );
 
   el("poolList").innerHTML = tasks.length
     ? tasks
         .map(
-          (t) => `
-      <li class="pool ${editingId === t.id ? "editing" : ""}" data-task="${t.id}">
+          (x) => `
+      <li class="pool ${editingId === x.id ? "editing" : ""}" data-task="${x.id}">
         <button class="poolMain" data-act="edit">
-          <span class="title">${esc(t.title)}</span>
-          <span class="meta">
-            ${t.kind === "general" ? "anytime" : weekdayLabel(t.weekdays)}
-            ${(t.tags || []).length ? " · " + (t.tags || []).map(esc).join(" · ") : ""}
+          <span class="title" dir="auto">${esc(x.title)}</span>
+          <span class="meta" dir="auto">
+            ${x.kind === "general" ? t("kindAnytime") : weekdayLabel(x.weekdays)}
+            ${(x.tags || []).length ? " · " + (x.tags || []).map(esc).join(" · ") : ""}
           </span>
         </button>
-        <button class="poolDel" data-act="delete" aria-label="Delete ${esc(t.title)}">🗑</button>
+        <button class="poolDel" data-act="delete" aria-label="${esc(
+          t("deleteLabel", x.title)
+        )}">🗑</button>
       </li>`
         )
         .join("")
-    : `<li class="empty">No tasks yet. Add the first one below.</li>`;
+    : `<li class="empty">${t("emptyPool")}</li>`;
 
   if (!keepInput) clearForm();
-}
-
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-function weekdayLabel(w) {
-  if (!w || !w.length) return "any day";
-  if (w.length === 7) return "every day";
-  return w.slice().sort().map((d) => DAYS[d]).join(" ");
 }
 
 function clearForm() {
@@ -302,8 +343,9 @@ function clearForm() {
   el("tTags").value = "";
   el("tKind").value = "recurring";
   [...el("tDays").querySelectorAll("input")].forEach((c) => (c.checked = false));
-  el("saveTask").textContent = "Add task";
+  el("saveTask").textContent = t("addTask");
   el("cancelEdit").hidden = true;
+  el("manageError").textContent = "";
   syncKindUI();
 }
 
@@ -316,28 +358,25 @@ el("poolList").addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-act]");
   if (!btn) return;
   const taskId = btn.closest(".pool").dataset.task;
+  const tasks = await store.listTasks(currentPerson());
+  const task = tasks.find((x) => x.id === taskId);
+  if (!task) return;
 
   if (btn.dataset.act === "delete") {
-    const tasks = await store.listTasks(currentPerson());
-    const t = tasks.find((x) => x.id === taskId);
-    if (!confirm(`Delete "${t?.title}"? Its history will be removed too.`)) return;
+    if (!confirm(t("confirmDelete", task.title))) return;
     if (editingId === taskId) clearForm();
     await store.deleteTask(taskId);
     return;
   }
 
-  // edit
-  const tasks = await store.listTasks(currentPerson());
-  const t = tasks.find((x) => x.id === taskId);
-  if (!t) return;
-  editingId = t.id;
-  el("tTitle").value = t.title;
-  el("tTags").value = (t.tags || []).join(", ");
-  el("tKind").value = t.kind;
+  editingId = task.id;
+  el("tTitle").value = task.title;
+  el("tTags").value = (task.tags || []).join(", ");
+  el("tKind").value = task.kind;
   [...el("tDays").querySelectorAll("input")].forEach(
-    (c) => (c.checked = (t.weekdays || []).includes(Number(c.value)))
+    (c) => (c.checked = (task.weekdays || []).includes(Number(c.value)))
   );
-  el("saveTask").textContent = "Save changes";
+  el("saveTask").textContent = t("saveChanges");
   el("cancelEdit").hidden = false;
   syncKindUI();
   el("tTitle").focus();
@@ -347,7 +386,6 @@ el("cancelEdit").addEventListener("click", clearForm);
 
 el("taskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const personId = currentPerson();
   const title = el("tTitle").value.trim();
   if (!title) return;
 
@@ -367,14 +405,15 @@ el("taskForm").addEventListener("submit", async (e) => {
 
   const btn = el("saveTask");
   btn.disabled = true;
+  el("manageError").textContent = "";
   try {
     if (editingId) await store.updateTask(editingId, patch);
-    else await store.createTask({ person_id: personId, ...patch });
+    else await store.createTask({ person_id: currentPerson(), ...patch });
     clearForm();
     el("tTitle").focus();
   } catch (err) {
     console.error(err);
-    el("manageError").textContent = err.message || "Could not save that task.";
+    el("manageError").textContent = err.message || t("saveFailed");
   } finally {
     btn.disabled = false;
   }
@@ -388,13 +427,13 @@ function showLogin(showIt) {
 }
 
 function landing() {
-  // Phones go straight to their own board; the wall panel starts at home.
   const me = myPerson();
   if (!location.hash && me) location.hash = `#/p/${me}`;
   else route();
 }
 
 async function start() {
+  applyLang();
   el("version").textContent =
     `v${APP_VERSION}${USE_LOCAL ? " · local" : ""}${IS_WALL ? " · wall" : ""}`;
 
@@ -436,16 +475,10 @@ el("loginForm").addEventListener("submit", async (e) => {
   if (error) {
     console.error("Sign-in failed:", error);
     const msg = (error.message || "").toLowerCase();
-    if (msg.includes("not confirmed")) {
-      err.textContent =
-        "This account isn't confirmed yet. Confirm it in Supabase under Authentication → Users.";
-    } else if (msg.includes("invalid login")) {
-      err.textContent = "That email and password don't match an account.";
-    } else if (msg.includes("failed to fetch")) {
-      err.textContent = "Can't reach the server. Check SUPABASE_URL in config.js.";
-    } else {
-      err.textContent = error.message;
-    }
+    if (msg.includes("not confirmed")) err.textContent = t("errNotConfirmed");
+    else if (msg.includes("invalid login")) err.textContent = t("errBadLogin");
+    else if (msg.includes("failed to fetch")) err.textContent = t("errNoServer");
+    else err.textContent = error.message;
     return;
   }
   el("password").value = "";
