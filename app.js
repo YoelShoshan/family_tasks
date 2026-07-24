@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.6.0";
+const APP_VERSION = "0.6.1";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase

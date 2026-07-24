@@ -28,8 +28,8 @@
   [hidden] { display: none !important; }
   #app { height: 100%; }
 
-  /* Flip the back arrow in LTR; it points the right way in RTL by default. */
-  [dir="ltr"] .backArrow { transform: scaleX(-1); }
+  /* ← points correctly in LTR; in RTL "back" means pointing right. */
+  [dir="rtl"] .backArrow { display: inline-block; transform: scaleX(-1); }
 
   /* ---------- login ---------- */
   #login { height: 100%; display: grid; place-items: center; padding: 24px; }
