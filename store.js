@@ -6,10 +6,11 @@
 //   createTask(t)                      -> task
 //   updateTask(id, patch)              -> task
 //   deleteTask(id)                     -> void
-//   listDayPlan(day, personId?)        -> [ {id, day, person_id, task_id, chosen_at, done_at} ]
+//   listDayPlan(day, personId?)        -> [ {id, day, person_id, task_id, chosen_at, done_at, abandoned_at} ]
 //   choose(day, personId, taskId)      -> plan row
 //   unchoose(planId)                   -> void
 //   setDone(planId, done)              -> plan row
+//   setAbandoned(planId, ab)           -> plan row
 //   history(personId, fromDay, toDay)  -> [ plan rows ]
 //
 //   listCollections(personId)          -> [ {id, person_id, name, sort_order, task_ids:[]} ]
@@ -121,6 +122,7 @@ export class LocalStore {
       task_id: taskId,
       chosen_at: new Date().toISOString(),
       done_at: null,
+      abandoned_at: null,
     };
     this.db.day_plan.push(row);
     this._save();
@@ -135,6 +137,15 @@ export class LocalStore {
   async setDone(planId, done) {
     const row = this.db.day_plan.find((p) => p.id === planId);
     row.done_at = done ? new Date().toISOString() : null;
+    if (done) row.abandoned_at = null; // completing clears abandonment
+    this._save();
+    return clone(row);
+  }
+
+  async setAbandoned(planId, ab) {
+    const row = this.db.day_plan.find((p) => p.id === planId);
+    row.abandoned_at = ab ? new Date().toISOString() : null;
+    if (ab) row.done_at = null; // abandoning clears completion
     this._save();
     return clone(row);
   }

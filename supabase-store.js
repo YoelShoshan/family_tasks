@@ -69,7 +69,24 @@ export class SupabaseStore {
     return ok(
       await this.sb
         .from("day_plan")
-        .update({ done_at: done ? new Date().toISOString() : null })
+        .update({
+          done_at: done ? new Date().toISOString() : null,
+          ...(done ? { abandoned_at: null } : {}), // completing clears abandonment
+        })
+        .eq("id", planId)
+        .select()
+        .single()
+    );
+  }
+
+  async setAbandoned(planId, ab) {
+    return ok(
+      await this.sb
+        .from("day_plan")
+        .update({
+          abandoned_at: ab ? new Date().toISOString() : null,
+          ...(ab ? { done_at: null } : {}), // abandoning clears completion
+        })
         .eq("id", planId)
         .select()
         .single()

@@ -23,8 +23,12 @@ export const STRINGS = {
     planBtn: "תכנון",
 
     emptyToday: "אין משימות להיום. פתחו <b>תכנון</b> ובחרו מה לעשות.",
-    removeFromToday: (title) => `הסרת ${title} מהיום`,
 
+    abandonLabel: (title) => `ויתור על ${title}`,
+    restoreLabel: (title) => `החזרת ${title}`,
+    abandoned: "ויתרת",
+    celebrate: "כל הכבוד!",
+    celebrateAll: "סיימת הכל להיום!",
     addToToday: "הוספה להיום",
     searchTasks: "חיפוש משימות",
     allTags: "הכל",
@@ -87,8 +91,12 @@ export const STRINGS = {
     planBtn: "Plan",
 
     emptyToday: "Nothing planned for today. Open <b>Plan</b> to pick what you'll do.",
-    removeFromToday: (title) => `Remove ${title} from today`,
 
+    abandonLabel: (title) => `Give up on ${title}`,
+    restoreLabel: (title) => `Restore ${title}`,
+    abandoned: "gave up",
+    celebrate: "Nice one!",
+    celebrateAll: "That's everything for today!",
     addToToday: "Add to today",
     searchTasks: "Search tasks",
     allTags: "All",

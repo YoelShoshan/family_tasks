@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.5.0";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -128,7 +128,12 @@ async function renderHome() {
       const mine = plans.filter((x) => x.person_id === p.id);
       const done = mine.filter((x) => x.done_at).length;
       const total = mine.length;
-      const dots = mine.map((x) => `<span class="dot ${x.done_at ? "on" : ""}"></span>`).join("");
+      const dots = mine
+        .map(
+          (x) =>
+            `<span class="dot ${x.done_at ? "on" : x.abandoned_at ? "gone" : ""}"></span>`
+        )
+        .join("");
       return `
         <button class="card" data-person="${p.id}" style="--c:${p.color}">
           <div class="name" dir="auto">${esc(p.name)}</div>
@@ -173,29 +178,37 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
   const rows = plans
     .map((p) => ({ plan: p, task: byId[p.task_id] }))
     .filter((r) => r.task)
-    .sort((a, b) =>
-      (a.plan.done_at ? 1 : 0) - (b.plan.done_at ? 1 : 0) ||
-      String(a.plan.chosen_at).localeCompare(String(b.plan.chosen_at))
-    );
+    .map((r) => ({
+      ...r,
+      state: r.plan.done_at ? "done" : r.plan.abandoned_at ? "gone" : "open",
+    }))
+    .sort((a, b) => {
+      const rank = { open: 0, done: 1, gone: 2 };
+      return (
+        rank[a.state] - rank[b.state] ||
+        String(a.plan.chosen_at).localeCompare(String(b.plan.chosen_at))
+      );
+    });
 
-  const openCount = rows.filter((r) => !r.plan.done_at).length;
-  const doneCount = rows.length - openCount;
+  const openCount = rows.filter((r) => r.state === "open").length;
+  const doneCount = rows.filter((r) => r.state === "done").length;
   el("count").textContent = rows.length ? `${doneCount} / ${rows.length}` : "";
 
   el("todayList").innerHTML = rows.length
     ? rows
         .map(
           (r, i) => `
-      <li class="task ${r.plan.done_at ? "is-done" : ""} ${
-            i === openCount && doneCount && openCount ? "first-done" : ""
+      <li class="task is-${r.state} ${
+            i === openCount && openCount && rows.length > openCount ? "first-closed" : ""
           }" data-plan="${r.plan.id}">
-        <button class="toggle" data-act="toggle" aria-pressed="${!!r.plan.done_at}">
+        <button class="toggle" data-act="toggle" aria-pressed="${r.state === "done"}">
           <span class="mark" aria-hidden="true"></span>
           <span class="title" dir="auto">${esc(r.task.title)}</span>
+          ${r.state === "gone" ? `<span class="goneTag">${t("abandoned")}</span>` : ""}
         </button>
-        <button class="remove" data-act="remove" aria-label="${esc(
-          t("removeFromToday", r.task.title)
-        )}">✕</button>
+        <button class="abandon" data-act="abandon" aria-label="${esc(
+          r.state === "gone" ? t("restoreLabel", r.task.title) : t("abandonLabel", r.task.title)
+        )}">${r.state === "gone" ? "↩" : "✕"}</button>
       </li>`
         )
         .join("")
@@ -281,13 +294,60 @@ el("todayList").addEventListener("click", async (e) => {
   const planId = li.dataset.plan;
 
   if (btn.dataset.act === "toggle") {
-    const done = btn.getAttribute("aria-pressed") === "true";
-    li.classList.toggle("is-done", !done); // instant feedback
-    await store.setDone(planId, !done);
+    const wasDone = btn.getAttribute("aria-pressed") === "true";
+    li.className = `task is-${wasDone ? "open" : "done"}`; // instant feedback
+
+    if (!wasDone) {
+      // was this the last open task?
+      const openLeft = [...el("todayList").querySelectorAll(".task.is-open")].length;
+      celebrate(li, openLeft === 0);
+    }
+    await store.setDone(planId, !wasDone);
   } else {
-    await store.unchoose(planId);
+    const wasGone = li.classList.contains("is-gone");
+    li.className = `task is-${wasGone ? "open" : "gone"}`;
+    await store.setAbandoned(planId, !wasGone);
   }
 });
+
+// ---------- celebration ----------
+
+function celebrate(li, isLast) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const box = li.getBoundingClientRect();
+  const originX = box.left + box.width / 2;
+  const originY = box.top + box.height / 2;
+
+  const colors = ["#22c55e", "#4ade80", "#86efac", "#facc15", "#38bdf8", "#f472b6"];
+  const count = isLast ? 90 : 26;
+  const layer = el("confetti");
+
+  for (let i = 0; i < count; i++) {
+    const bit = document.createElement("i");
+    const angle = Math.random() * Math.PI * 2;
+    const power = (isLast ? 160 : 90) * (0.4 + Math.random() * 0.9);
+    bit.className = "bit";
+    bit.style.cssText = `
+      left:${originX}px; top:${originY}px;
+      background:${colors[(Math.random() * colors.length) | 0]};
+      --dx:${Math.cos(angle) * power}px;
+      --dy:${Math.sin(angle) * power - (isLast ? 140 : 70)}px;
+      --rot:${(Math.random() * 720 - 360) | 0}deg;
+      --dur:${(isLast ? 1100 : 750) + Math.random() * 500}ms;
+      width:${5 + Math.random() * 5}px; height:${7 + Math.random() * 6}px;
+    `;
+    layer.appendChild(bit);
+    bit.addEventListener("animationend", () => bit.remove());
+  }
+
+  const banner = el("cheer");
+  banner.textContent = isLast ? t("celebrateAll") : t("celebrate");
+  banner.classList.toggle("big", isLast);
+  banner.classList.remove("show");
+  void banner.offsetWidth; // restart the animation
+  banner.classList.add("show");
+}
 
 el("planList").addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-add]");
