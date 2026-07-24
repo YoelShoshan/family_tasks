@@ -156,29 +156,31 @@
   /* ---------- celebration ---------- */
   #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
   #confetti .bit {
-    position: absolute; border-radius: 2px;
-    animation: burst var(--dur) cubic-bezier(.2,.7,.4,1) forwards;
+    position: absolute;
+    animation: burst var(--dur) cubic-bezier(.15,.6,.35,1) var(--delay, 0ms) forwards;
+    opacity: 0;
   }
   @keyframes burst {
-    0%   { transform: translate(-50%, -50%) rotate(0); opacity: 1; }
-    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 220px))
-                     rotate(var(--rot)); opacity: 0; }
+    0%   { transform: translate(-50%, -50%) rotate(0) scale(1); opacity: 1; }
+    70%  { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 620px))
+                     rotate(var(--rot)) scale(.85); opacity: 0; }
   }
   #cheer {
-    position: fixed; inset-inline: 0; top: 22%; z-index: 41;
+    position: fixed; inset-inline: 0; top: 20%; z-index: 41;
     text-align: center; pointer-events: none;
-    font-size: 26px; font-weight: 800; color: #22c55e;
-    opacity: 0; text-shadow: 0 2px 18px rgba(0,0,0,.6);
+    font-size: clamp(26px, 4vw, 38px); font-weight: 800; color: #22c55e;
+    opacity: 0; text-shadow: 0 2px 18px rgba(0,0,0,.7);
   }
-  #cheer.big { font-size: clamp(32px, 6vw, 56px); }
-  #cheer.show { animation: cheerPop 1.5s ease forwards; }
-  #cheer.big.show { animation-duration: 2.1s; }
+  #cheer.big { font-size: clamp(34px, 7vw, 64px); }
+  #cheer.show { animation: cheerPop 2s ease forwards; }
+  #cheer.big.show { animation-duration: 2.8s; }
   @keyframes cheerPop {
     0%   { opacity: 0; transform: scale(.7); }
-    18%  { opacity: 1; transform: scale(1.06); }
-    30%  { transform: scale(1); }
-    75%  { opacity: 1; }
-    100% { opacity: 0; transform: scale(1); }
+    12%  { opacity: 1; transform: scale(1.08); }
+    22%  { transform: scale(1); }
+    80%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.02); }
   }
 
   /* ---------- plan panel ---------- */

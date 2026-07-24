@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.5.0";
+const APP_VERSION = "0.6.0";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -146,7 +146,7 @@ async function renderHome() {
 
 el("home").addEventListener("click", (e) => {
   const card = e.target.closest("[data-person]");
-  if (card) location.hash = `#/p/${card.dataset.person}`;
+  if (card) goTo(`#/p/${card.dataset.person}`);
 });
 
 // ---------- person board ----------
@@ -312,30 +312,65 @@ el("todayList").addEventListener("click", async (e) => {
 
 // ---------- celebration ----------
 
+// Synthesized so there's no audio file to host. Unlocked by the first tap.
+let audioCtx = null;
+function chime(isLast) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+
+    // rising major arpeggio; a fuller one when the day is finished
+    const notes = isLast
+      ? [523.25, 659.25, 783.99, 1046.5, 1318.5] // C5 E5 G5 C6 E6
+      : [659.25, 830.61, 987.77];                // E5 G#5 B5
+    const now = audioCtx.currentTime;
+
+    notes.forEach((freq, i) => {
+      const at = now + i * (isLast ? 0.1 : 0.075);
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, at);
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(isLast ? 0.22 : 0.16, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + (isLast ? 0.9 : 0.6));
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(at);
+      osc.stop(at + 1.1);
+    });
+  } catch {
+    /* audio blocked or unsupported — the visual still runs */
+  }
+}
+
 function celebrate(li, isLast) {
+  chime(isLast);
+
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   const box = li.getBoundingClientRect();
   const originX = box.left + box.width / 2;
   const originY = box.top + box.height / 2;
 
-  const colors = ["#22c55e", "#4ade80", "#86efac", "#facc15", "#38bdf8", "#f472b6"];
-  const count = isLast ? 90 : 26;
+  const colors = ["#22c55e", "#4ade80", "#86efac", "#facc15", "#fb923c", "#38bdf8", "#f472b6", "#a78bfa"];
+  const count = isLast ? 220 : 90;
   const layer = el("confetti");
 
   for (let i = 0; i < count; i++) {
     const bit = document.createElement("i");
     const angle = Math.random() * Math.PI * 2;
-    const power = (isLast ? 160 : 90) * (0.4 + Math.random() * 0.9);
+    const power = (isLast ? 320 : 220) * (0.35 + Math.random() * 1.05);
     bit.className = "bit";
     bit.style.cssText = `
       left:${originX}px; top:${originY}px;
       background:${colors[(Math.random() * colors.length) | 0]};
       --dx:${Math.cos(angle) * power}px;
-      --dy:${Math.sin(angle) * power - (isLast ? 140 : 70)}px;
-      --rot:${(Math.random() * 720 - 360) | 0}deg;
-      --dur:${(isLast ? 1100 : 750) + Math.random() * 500}ms;
-      width:${5 + Math.random() * 5}px; height:${7 + Math.random() * 6}px;
+      --dy:${Math.sin(angle) * power - (isLast ? 220 : 150)}px;
+      --rot:${(Math.random() * 1080 - 540) | 0}deg;
+      --dur:${(isLast ? 2000 : 1600) + Math.random() * 900}ms;
+      --delay:${Math.random() * (isLast ? 180 : 90)}ms;
+      width:${6 + Math.random() * 7}px; height:${9 + Math.random() * 9}px;
+      border-radius:${Math.random() < 0.35 ? "50%" : "2px"};
     `;
     layer.appendChild(bit);
     bit.addEventListener("animationend", () => bit.remove());
@@ -375,9 +410,34 @@ el("planSearch").addEventListener("input", (e) => {
   renderPerson(currentPerson(), { keepPanel: true });
 });
 
+// <a href="#/..."> navigations push history natively; count them too.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a[href^="#/"]');
+  if (a && a.id !== "manageBack") navDepth += 1;
+});
+
+// Android back: close the plan panel before leaving the screen.
+window.addEventListener("popstate", () => {
+  if (planOpen) setPanel(false);
+});
+
 el("planBtn").addEventListener("click", () => setPanel(!planOpen));
 el("scrim").addEventListener("click", () => setPanel(false));
-el("back").addEventListener("click", () => { location.hash = ""; });
+// Depth of in-app navigation, so back can unwind rather than exit.
+let navDepth = 0;
+window.addEventListener("popstate", () => { navDepth = Math.max(0, navDepth - 1); });
+
+function goTo(hash) {
+  navDepth += 1;
+  location.hash = hash;
+}
+
+function goBack() {
+  if (navDepth > 0) history.back();
+  else location.hash = "";
+}
+
+el("back").addEventListener("click", goBack);
 
 // ---------- manage ----------
 
@@ -521,6 +581,11 @@ el("setsSection").addEventListener("click", async (e) => {
   }
 });
 
+el("manageBack").addEventListener("click", (e) => {
+  e.preventDefault();
+  goBack();
+});
+
 el("setDoneBtn").addEventListener("click", () => {
   editingSetId = null;
   renderManage(currentPerson());
@@ -634,8 +699,13 @@ function showLogin(showIt) {
 
 function landing() {
   const me = myPerson();
-  if (!location.hash && me) location.hash = `#/p/${me}`;
-  else route();
+  if (!location.hash && me) {
+    // replace, not push — otherwise Android back lands on an empty hash
+    history.replaceState(null, "", `#/p/${me}`);
+    route();
+  } else {
+    route();
+  }
 }
 
 async function start() {
