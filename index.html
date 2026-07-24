@@ -23,10 +23,12 @@
     -webkit-user-select: none; user-select: none; overflow: hidden;
   }
   button { font: inherit; color: inherit; }
-
-  /* ---------- login ---------- */
+  a { color: inherit; text-decoration: none; }
+  ul { list-style: none; margin: 0; padding: 0; }
   [hidden] { display: none !important; }
   #app { height: 100%; }
+
+  /* ---------- login ---------- */
   #login { height: 100%; display: grid; place-items: center; padding: 24px; }
   #loginForm { width: min(380px, 100%); display: grid; gap: 12px; }
   #loginForm h1 { margin: 0; font-size: 30px; font-weight: 700; }
@@ -68,24 +70,24 @@
   .dot.on{ background: var(--c); }
   .unplanned { font-size: 15px; color: var(--muted); font-style: italic; }
 
-  /* ---------- person ---------- */
-  #person { height: 100%; display: flex; flex-direction: column; }
+  /* ---------- shared top bar ---------- */
   .bar {
-    display: flex; align-items: center; gap: 14px;
+    display: flex; align-items: center; gap: 12px;
     padding: 14px 18px; border-bottom: 1px solid var(--line);
     background: linear-gradient(180deg, color-mix(in srgb, var(--c) 22%, transparent), transparent);
     box-shadow: inset 0 4px 0 var(--c);
   }
-  .bar button {
+  .bar .btn {
     all: unset; cursor: pointer; padding: 10px 16px; border-radius: 12px;
-    background: var(--panel2); font-size: 16px; font-weight: 600;
+    background: var(--panel2); font-size: 16px; font-weight: 600; text-align: center;
   }
-  .bar button:active { background: #232f3d; }
-  #personName { font-size: clamp(20px, 3vw, 30px); font-weight: 700; flex: 1; }
+  .bar .btn:active { background: #232f3d; }
+  .bar .grow { flex: 1; font-size: clamp(20px, 3vw, 30px); font-weight: 700; }
   #count { font-variant-numeric: tabular-nums; color: var(--c); font-weight: 700;
            font-size: clamp(18px, 2.6vw, 26px); }
 
-  ul { list-style: none; margin: 0; padding: 0; }
+  /* ---------- person board ---------- */
+  #person, #manage { height: 100%; display: flex; flex-direction: column; }
   #todayList { flex: 1; overflow-y: auto; padding: 14px 18px 40px; display: grid; gap: 10px; align-content: start; }
 
   .task { display: flex; align-items: stretch; gap: 8px; }
@@ -107,7 +109,6 @@
     background: var(--panel); color: var(--muted); font-size: 20px;
   }
   .task .remove:active { background: #3a2028; color: #ff8b9a; }
-
   .task.is-done .toggle { background: transparent; }
   .task.is-done .title { color: var(--muted); text-decoration: line-through; }
   .task.is-done .mark { border-color: var(--c); background: var(--c); }
@@ -117,7 +118,7 @@
     border-width: 0 3px 3px 0; transform: rotate(45deg) translate(-1px, -2px);
   }
   .task.first-done { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
-  .empty { padding: 40px 22px; color: var(--muted); font-size: 17px; line-height: 1.6; }
+  .empty { padding: 36px 22px; color: var(--muted); font-size: 17px; line-height: 1.6; }
 
   /* ---------- plan panel ---------- */
   #scrim {
@@ -134,21 +135,92 @@
   }
   #planPanel.open { transform: none; }
   #planPanel h2 {
-    margin: 0; padding: 20px 22px 12px; font-size: 14px; letter-spacing: .1em;
+    margin: 0; padding: 20px 20px 10px; font-size: 14px; letter-spacing: .1em;
     text-transform: uppercase; color: var(--muted); font-weight: 600;
   }
+  #planSearch {
+    font: inherit; color: var(--text); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin: 0 16px 10px;
+    -webkit-user-select: text; user-select: text;
+  }
+  #planSearch:focus { outline: none; border-color: var(--c); }
+  #tagBar { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+  #tagBar:empty { display: none; }
+  .chip {
+    all: unset; cursor: pointer; padding: 7px 13px; border-radius: 999px;
+    background: var(--panel2); font-size: 13px; color: var(--muted);
+    border: 1px solid transparent;
+  }
+  .chip.on { background: color-mix(in srgb, var(--c) 22%, transparent);
+             color: var(--text); border-color: var(--c); }
   #planList { overflow-y: auto; padding: 0 16px 28px; display: grid; gap: 8px; align-content: start; }
   .avail {
     all: unset; cursor: pointer; width: 100%;
     display: flex; align-items: center; gap: 12px;
-    padding: 16px 18px; border-radius: 14px; background: var(--panel2);
+    padding: 14px 18px; border-radius: 14px; background: var(--panel2);
     min-height: 60px;
   }
   .avail:active { background: #24303e; }
-  .avail .title { flex: 1; font-size: 18px; }
-  .avail .kind { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .avail .body { flex: 1; display: grid; gap: 2px; }
+  .avail .title { font-size: 18px; }
+  .avail .tags { font-size: 12px; color: var(--muted); }
+  .avail .kind { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
   .avail .plus { font-size: 24px; color: var(--c); font-weight: 700; }
   .avail.added { opacity: .35; }
+
+  /* ---------- manage ---------- */
+  #poolList { flex: 1; overflow-y: auto; padding: 14px 18px 20px; display: grid; gap: 8px; align-content: start; }
+  .pool { display: flex; gap: 8px; }
+  .poolMain {
+    all: unset; cursor: pointer; flex: 1; display: grid; gap: 3px;
+    padding: 14px 18px; border-radius: 14px; background: var(--panel);
+  }
+  .pool.editing .poolMain { box-shadow: inset 0 0 0 2px var(--c); }
+  .poolMain .title { font-size: 18px; font-weight: 500; }
+  .poolMain .meta { font-size: 13px; color: var(--muted); }
+  .poolDel {
+    all: unset; cursor: pointer; width: 52px; flex: none;
+    display: grid; place-items: center; border-radius: 14px;
+    background: var(--panel); font-size: 17px;
+  }
+  .poolDel:active { background: #3a2028; }
+
+  #taskForm {
+    border-top: 1px solid var(--line); background: var(--panel);
+    padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+    display: grid; gap: 10px;
+  }
+  #taskForm input, #taskForm select {
+    font: inherit; color: var(--text); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    -webkit-user-select: text; user-select: text;
+  }
+  #taskForm input:focus, #taskForm select:focus { outline: none; border-color: var(--c); }
+  .formRow { display: flex; gap: 10px; }
+  .formRow > * { flex: 1; }
+  #tDays { display: flex; flex-wrap: wrap; gap: 6px; }
+  #tDays label {
+    cursor: pointer; padding: 9px 13px; border-radius: 999px;
+    background: var(--panel2); font-size: 14px; color: var(--muted);
+    border: 1px solid transparent;
+  }
+  #tDays input { display: none; }
+  #tDays input:checked + span { color: var(--text); }
+  #tDays label:has(input:checked) {
+    background: color-mix(in srgb, var(--c) 22%, transparent); border-color: var(--c);
+  }
+  #saveTask {
+    all: unset; cursor: pointer; text-align: center; padding: 15px;
+    border-radius: 12px; background: var(--c); font-weight: 600; color: #fff;
+  }
+  #saveTask[disabled] { opacity: .5; }
+  #cancelEdit {
+    all: unset; cursor: pointer; text-align: center; padding: 15px;
+    border-radius: 12px; background: var(--panel2); font-weight: 600;
+  }
+  #manageError:empty { display: none; }
+  #manageError { margin: 0; color: #ff8b9a; font-size: 14px; }
 
   #version {
     position: fixed; right: 8px; bottom: 6px; z-index: 3;
@@ -174,24 +246,61 @@
   </section>
 
   <div id="app">
-  <section id="homeView">
-    <header class="eyebrow">Today</header>
-    <main id="home"></main>
-  </section>
 
-  <section id="person" hidden>
-    <div class="bar">
-      <button id="back" aria-label="Back to everyone">←</button>
-      <span id="personName"></span>
-      <span id="count"></span>
-      <button id="planBtn" aria-expanded="false" aria-controls="planPanel">Plan</button>
-    </div>
-    <ul id="todayList"></ul>
-  </section>
+    <section id="homeView">
+      <header class="eyebrow">Today</header>
+      <main id="home"></main>
+    </section>
+
+    <section id="person" hidden>
+      <div class="bar">
+        <button id="back" class="btn" aria-label="Back to everyone">←</button>
+        <span id="personName" class="grow"></span>
+        <span id="count"></span>
+        <a id="manageLink" class="btn" href="#">Tasks</a>
+        <button id="planBtn" class="btn" aria-expanded="false" aria-controls="planPanel">Plan</button>
+      </div>
+      <ul id="todayList"></ul>
+    </section>
+
+    <section id="manage" hidden>
+      <div class="bar">
+        <a id="manageBack" class="btn" href="#" aria-label="Back to board">←</a>
+        <span id="manageName" class="grow"></span>
+      </div>
+      <ul id="poolList"></ul>
+      <form id="taskForm">
+        <input id="tTitle" type="text" placeholder="New task" autocomplete="off" required>
+        <input id="tTags" type="text" placeholder="Tags, comma separated (school, home)" autocomplete="off">
+        <div class="formRow">
+          <select id="tKind">
+            <option value="recurring">Recurring</option>
+            <option value="general">Anytime project</option>
+          </select>
+        </div>
+        <div id="daysRow">
+          <div id="tDays">
+            <label><input type="checkbox" value="0"><span>Sun</span></label>
+            <label><input type="checkbox" value="1"><span>Mon</span></label>
+            <label><input type="checkbox" value="2"><span>Tue</span></label>
+            <label><input type="checkbox" value="3"><span>Wed</span></label>
+            <label><input type="checkbox" value="4"><span>Thu</span></label>
+            <label><input type="checkbox" value="5"><span>Fri</span></label>
+            <label><input type="checkbox" value="6"><span>Sat</span></label>
+          </div>
+        </div>
+        <p id="manageError" role="alert"></p>
+        <button id="saveTask" type="submit">Add task</button>
+        <button id="cancelEdit" type="button" hidden>Cancel</button>
+      </form>
+    </section>
+
   </div>
 
   <aside id="planPanel" aria-label="Available tasks">
     <h2>Add to today</h2>
+    <input id="planSearch" type="search" placeholder="Search tasks" autocomplete="off">
+    <div id="tagBar"></div>
     <ul id="planList"></ul>
   </aside>
   <div id="scrim"></div>

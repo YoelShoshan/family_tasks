@@ -2,7 +2,7 @@
 // Every method returns a Promise. Both backends implement this exactly.
 //
 //   listPeople()                       -> [ {id, name, color, sort_order} ]
-//   listTasks(personId)                -> [ {id, person_id, title, kind, weekdays, active} ]
+//   listTasks(personId)                -> [ {id, person_id, title, kind, weekdays, tags, active} ]
 //   createTask(t)                      -> task
 //   updateTask(id, patch)              -> task
 //   deleteTask(id)                     -> void
@@ -29,16 +29,16 @@ const SEED = {
 // give the seed people a few tasks
 (() => {
   const [a, b, c] = SEED.person;
-  const mk = (p, title, kind, weekdays = null) =>
-    SEED.task.push({ id: uid(), person_id: p.id, title, kind, weekdays, active: true });
-  mk(a, "Swim", "recurring", [0, 2, 4]);
-  mk(a, "Read 20 min", "recurring", null);
-  mk(a, "Fix the shelf", "general");
-  mk(b, "Practice guitar", "recurring", null);
-  mk(b, "Homework", "recurring", [0, 1, 2, 3, 4]);
-  mk(b, "Clear the desk", "general");
-  mk(c, "Tidy room", "recurring", null);
-  mk(c, "Water plants", "recurring", [1, 4]);
+  const mk = (p, title, kind, weekdays = null, tags = []) =>
+    SEED.task.push({ id: uid(), person_id: p.id, title, kind, weekdays, tags, active: true });
+  mk(a, "Swim", "recurring", [0, 2, 4], ["sport"]);
+  mk(a, "Read 20 min", "recurring", null, ["quiet"]);
+  mk(a, "Fix the shelf", "general", null, ["home"]);
+  mk(b, "Practice guitar", "recurring", null, ["music"]);
+  mk(b, "Homework", "recurring", [0, 1, 2, 3, 4], ["school"]);
+  mk(b, "Clear the desk", "general", null, ["home"]);
+  mk(c, "Tidy room", "recurring", null, ["home"]);
+  mk(c, "Water plants", "recurring", [1, 4], ["home"]);
 })();
 
 export class LocalStore {
@@ -68,6 +68,7 @@ export class LocalStore {
     const row = {
       id: uid(),
       weekdays: null,
+      tags: [],
       active: true,
       created_at: new Date().toISOString(),
       ...t,
