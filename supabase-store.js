@@ -47,6 +47,16 @@ export class SupabaseStore {
     return ok(await q);
   }
 
+  async listDayPlanRange(fromDay, toDay, personId) {
+    let q = this.sb
+      .from("day_plan")
+      .select("*")
+      .gte("day", fromDay)
+      .lte("day", toDay);
+    if (personId) q = q.eq("person_id", personId);
+    return ok(await q);
+  }
+
   async choose(day, personId, taskId) {
     // unique (day, task_id) makes this idempotent — tapping twice is harmless
     return ok(

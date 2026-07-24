@@ -7,6 +7,7 @@
 //   updateTask(id, patch)              -> task
 //   deleteTask(id)                     -> void
 //   listDayPlan(day, personId?)        -> [ {id, day, person_id, task_id, chosen_at, done_at, abandoned_at} ]
+//   listDayPlanRange(from, to, pid?)   -> [ plan rows ]  (inclusive day range)
 //   choose(day, personId, taskId)      -> plan row
 //   unchoose(planId)                   -> void
 //   setDone(planId, done)              -> plan row
@@ -109,6 +110,13 @@ export class LocalStore {
   async listDayPlan(day, personId) {
     return clone(this.db.day_plan).filter(
       (p) => p.day === day && (!personId || p.person_id === personId)
+    );
+  }
+
+  async listDayPlanRange(fromDay, toDay, personId) {
+    return clone(this.db.day_plan).filter(
+      (p) =>
+        p.day >= fromDay && p.day <= toDay && (!personId || p.person_id === personId)
     );
   }
 

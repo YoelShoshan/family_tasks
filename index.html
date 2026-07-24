@@ -68,7 +68,7 @@
   .card {
     all: unset; cursor: pointer;
     display: grid; grid-template-columns: 1fr auto;
-    grid-template-areas: "name count" "dots count";
+    grid-template-areas: "name count" "dots count" "week week";
     align-items: center; column-gap: 20px;
     padding: 22px 26px; border-radius: 20px;
     background: var(--panel); border-inline-start: 10px solid var(--c);
@@ -360,6 +360,64 @@
   #manageError:empty { display: none; }
   #manageError { margin: 0; color: #ff8b9a; font-size: 14px; }
 
+  .week { grid-area: week; display: flex; gap: 4px; margin-top: 10px; }
+  .wk {
+    width: 100%; max-width: 26px; height: 5px; border-radius: 3px;
+    background: #222c38;
+  }
+  .wk.on { background: color-mix(in srgb, var(--c) 75%, transparent); }
+  .wk.today { box-shadow: 0 0 0 1px var(--muted); }
+
+  /* ---------- rate colouring in plan panel ---------- */
+  .avail.r1 { box-shadow: inset 3px 0 0 color-mix(in srgb, #22c55e 25%, transparent); }
+  .avail.r2 { box-shadow: inset 3px 0 0 color-mix(in srgb, #22c55e 45%, transparent); }
+  .avail.r3 { box-shadow: inset 3px 0 0 color-mix(in srgb, #22c55e 70%, transparent); }
+  .avail.r4 { box-shadow: inset 3px 0 0 #22c55e; }
+  [dir="rtl"] .avail.r1, [dir="rtl"] .avail.r2,
+  [dir="rtl"] .avail.r3, [dir="rtl"] .avail.r4 { box-shadow: none; }
+  [dir="rtl"] .avail.r1 { box-shadow: inset -3px 0 0 color-mix(in srgb, #22c55e 25%, transparent); }
+  [dir="rtl"] .avail.r2 { box-shadow: inset -3px 0 0 color-mix(in srgb, #22c55e 45%, transparent); }
+  [dir="rtl"] .avail.r3 { box-shadow: inset -3px 0 0 color-mix(in srgb, #22c55e 70%, transparent); }
+  [dir="rtl"] .avail.r4 { box-shadow: inset -3px 0 0 #22c55e; }
+
+  /* ---------- stats ---------- */
+  #stats { height: 100%; display: flex; flex-direction: column; }
+  #statsBody { flex: 1; overflow-y: auto; padding-bottom: 40px; }
+  .statGrid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    padding: 16px 18px 4px;
+  }
+  .stat { background: var(--panel); border-radius: 14px; padding: 16px 14px; text-align: center; }
+  .statNum {
+    font-size: clamp(26px, 5vw, 40px); font-weight: 700; color: var(--c);
+    font-variant-numeric: tabular-nums; direction: ltr;
+  }
+  .statLbl { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
+
+  .heatWrap { display: flex; gap: 8px; padding: 4px 18px 8px; align-items: flex-start; }
+  .heatDays {
+    display: grid; grid-template-rows: repeat(7, 1fr); gap: 4px;
+    font-size: 10px; color: var(--muted); text-align: center;
+  }
+  .heatDays span { height: 18px; line-height: 18px; }
+  .heat {
+    flex: 1; display: grid; grid-template-columns: repeat(8, 1fr);
+    grid-auto-flow: column; grid-template-rows: repeat(7, 1fr); gap: 4px;
+  }
+  .cell { height: 18px; border-radius: 4px; background: #1b2531; }
+  .cell.blank { background: transparent; }
+  .cell.l1 { background: color-mix(in srgb, #22c55e 28%, #1b2531); }
+  .cell.l2 { background: color-mix(in srgb, #22c55e 50%, #1b2531); }
+  .cell.l3 { background: color-mix(in srgb, #22c55e 72%, #1b2531); }
+  .cell.l4 { background: #22c55e; }
+
+  .taskStats { display: grid; gap: 12px; padding: 4px 18px 0; }
+  .tsTop { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .tsTitle { flex: 1; font-size: 16px; }
+  .tsN { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .tsBar { height: 8px; border-radius: 4px; background: #1b2531; overflow: hidden; }
+  .tsBar span { display: block; height: 100%; background: var(--c); border-radius: 4px; }
+
   #version {
     position: fixed; inset-inline-end: 8px; bottom: 6px; z-index: 3;
     font-size: 11px; color: var(--muted); opacity: .75;
@@ -400,6 +458,7 @@
         <button id="back" class="btn"><span class="backArrow">←</span></button>
         <span id="personName" class="grow" dir="auto"></span>
         <span id="count"></span>
+        <a id="statsLink" class="btn" href="#"></a>
         <a id="manageLink" class="btn" href="#"></a>
         <button id="planBtn" class="btn" aria-expanded="false" aria-controls="planPanel"></button>
       </div>
@@ -440,6 +499,14 @@
         <button id="saveTask" type="submit"></button>
         <button id="cancelEdit" type="button" hidden></button>
       </form>
+    </section>
+
+    <section id="stats" hidden>
+      <div class="bar">
+        <a id="statsBack" class="btn" href="#"><span class="backArrow">←</span></a>
+        <span id="statsName" class="grow" dir="auto"></span>
+      </div>
+      <div id="statsBody"></div>
     </section>
 
   </div>

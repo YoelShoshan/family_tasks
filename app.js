@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.6.1";
+const APP_VERSION = "0.7.0";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -53,6 +53,7 @@ function applyLang() {
   el("back").setAttribute("aria-label", t("backToEveryone"));
   el("manageBack").setAttribute("aria-label", t("backToBoard"));
   el("manageLink").textContent = t("tasksBtn");
+  el("statsLink").textContent = t("statsBtn");
   el("planBtn").textContent = t("planBtn");
 
   el("planTitle").textContent = t("addToToday");
@@ -84,10 +85,23 @@ document.addEventListener("click", (e) => {
   if (e.target.closest(".langBtn")) toggleLang();
 });
 
+// ---------- date helpers ----------
+
+const dayStr = (d) => d.toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + "T12:00:00"); // noon avoids DST edge cases
+  d.setDate(d.getDate() + n);
+  return dayStr(d);
+}
+function startOfWeek(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  return addDays(dateStr, -d.getDay()); // Sunday-first
+}
+
 // ---------- routing ----------
 
 let unsub = null;
-const VIEWS = ["homeView", "person", "manage"];
+const VIEWS = ["homeView", "person", "manage", "stats"];
 const show = (view) => VIEWS.forEach((v) => (el(v).hidden = v !== view));
 
 function route() {
@@ -95,8 +109,12 @@ function route() {
 
   const person = location.hash.match(/^#\/p\/([^/]+)/);
   const manage = location.hash.match(/^#\/manage\/([^/]+)/);
+  const stats = location.hash.match(/^#\/stats\/([^/]+)/);
 
-  if (manage) {
+  if (stats) {
+    renderStats(stats[1]);
+    unsub = store.subscribe(() => renderStats(stats[1]));
+  } else if (manage) {
     renderManage(manage[1]);
     unsub = store.subscribe(() => renderManage(manage[1], { keepInput: true }));
   } else if (person) {
@@ -112,7 +130,8 @@ function route() {
 
 window.addEventListener("hashchange", route);
 
-const currentPerson = () => location.hash.match(/^#\/(?:p|manage)\/([^/]+)/)?.[1];
+const currentPerson = () =>
+  location.hash.match(/^#\/(?:p|manage|stats)\/([^/]+)/)?.[1];
 
 // ---------- home ----------
 
@@ -120,8 +139,14 @@ async function renderHome() {
   show("homeView");
 
   const day = today();
+  const weekAgo = addDays(day, -6);
   const people = await store.listPeople();
-  const plans = await store.listDayPlan(day);
+  const [plans, week] = await Promise.all([
+    store.listDayPlan(day),
+    store.listDayPlanRange(weekAgo, day),
+  ]);
+
+  const days7 = Array.from({ length: 7 }, (_, i) => addDays(weekAgo, i));
 
   el("home").innerHTML = people
     .map((p) => {
@@ -134,11 +159,21 @@ async function renderHome() {
             `<span class="dot ${x.done_at ? "on" : x.abandoned_at ? "gone" : ""}"></span>`
         )
         .join("");
+
+      const mineWeek = week.filter((x) => x.person_id === p.id && x.done_at);
+      const strip = days7
+        .map((d) => {
+          const n = mineWeek.filter((x) => x.day === d).length;
+          return `<span class="wk ${n ? "on" : ""}${d === day ? " today" : ""}"></span>`;
+        })
+        .join("");
+
       return `
         <button class="card" data-person="${p.id}" style="--c:${p.color}">
           <div class="name" dir="auto">${esc(p.name)}</div>
           <div class="count ${total ? "" : "dim"}">${done} / ${total}</div>
           <div class="dots">${total ? dots : `<span class="unplanned">${t("notPlanned")}</span>`}</div>
+          <div class="week">${strip}</div>
         </button>`;
     })
     .join("");
@@ -167,13 +202,26 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
   el("person").style.setProperty("--c", person.color);
   el("personName").textContent = person.name;
   el("manageLink").href = `#/manage/${personId}`;
+  el("statsLink").href = `#/stats/${personId}`;
 
-  const [tasks, plans, collections] = await Promise.all([
+  const [tasks, plans, collections, recent] = await Promise.all([
     store.listTasks(personId),
     store.listDayPlan(day, personId),
     store.listCollections(personId),
+    store.listDayPlanRange(addDays(day, -27), day, personId),
   ]);
   const byId = Object.fromEntries(tasks.map((x) => [x.id, x]));
+
+  // completions per task over the last 4 weeks, for rate colouring
+  const rate = {};
+  recent.forEach((p) => {
+    if (p.done_at) rate[p.task_id] = (rate[p.task_id] || 0) + 1;
+  });
+  const rateMax = Math.max(...Object.values(rate), 1);
+  const rateLevel = (id) => {
+    const n = rate[id] || 0;
+    return n === 0 ? 0 : Math.min(4, Math.ceil((n / rateMax) * 4));
+  };
 
   const rows = plans
     .map((p) => ({ plan: p, task: byId[p.task_id] }))
@@ -262,7 +310,7 @@ async function renderPerson(personId, { keepPanel = false } = {}) {
         .map(
           (x) => `
       <li>
-        <button class="avail" data-add="${x.id}">
+        <button class="avail r${rateLevel(x.id)}" data-add="${x.id}">
           <span class="body">
             <span class="title" dir="auto">${esc(x.title)}</span>
             ${(x.tags || []).length
@@ -690,7 +738,124 @@ el("taskForm").addEventListener("submit", async (e) => {
   }
 });
 
-// ---------- auth gate ----------
+// ---------- stats ----------
+
+async function renderStats(personId) {
+  const people = await store.listPeople();
+  const person = people.find((p) => p.id === personId);
+  if (!person) { location.hash = ""; return; }
+
+  show("stats");
+  el("stats").style.setProperty("--c", person.color);
+  el("statsName").textContent = t("statsTitle", person.name);
+  el("statsBack").href = `#/p/${personId}`;
+
+  const end = today();
+  const heatStart = addDays(startOfWeek(end), -7 * 7); // 8 weeks incl. this one
+  const [tasks, plans] = await Promise.all([
+    store.listTasks(personId),
+    store.listDayPlanRange(heatStart, end, personId),
+  ]);
+
+  const doneOnly = plans.filter((p) => p.done_at);
+
+  if (!doneOnly.length) {
+    el("statsBody").innerHTML = `<p class="hint">${t("noHistory")}</p>`;
+    return;
+  }
+
+  // --- this week ---
+  const weekStart = startOfWeek(end);
+  const thisWeek = doneOnly.filter((p) => p.day >= weekStart);
+  const weekDays = new Set(thisWeek.map((p) => p.day)).size;
+
+  // --- last 4 weeks ---
+  const fourStart = addDays(weekStart, -21);
+  const last4 = doneOnly.filter((p) => p.day >= fourStart);
+
+  // best week in the visible window (a gentler stand-in for streaks)
+  const byWeek = {};
+  doneOnly.forEach((p) => {
+    const w = startOfWeek(p.day);
+    byWeek[w] = (byWeek[w] || 0) + 1;
+  });
+  const bestWeek = Math.max(...Object.values(byWeek));
+
+  // --- heatmap: 8 columns of 7 days ---
+  const perDay = {};
+  doneOnly.forEach((p) => { perDay[p.day] = (perDay[p.day] || 0) + 1; });
+  const peak = Math.max(...Object.values(perDay), 1);
+
+  let cells = "";
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 8; col++) {
+      const d = addDays(heatStart, col * 7 + row);
+      if (d > end) { cells += `<span class="cell blank"></span>`; continue; }
+      const n = perDay[d] || 0;
+      const lvl = n === 0 ? 0 : Math.min(4, Math.ceil((n / peak) * 4));
+      cells += `<span class="cell l${lvl}" title="${d}: ${n}"></span>`;
+    }
+  }
+
+  // --- per task, last 4 weeks ---
+  const byTask = {};
+  last4.forEach((p) => {
+    byTask[p.task_id] = byTask[p.task_id] || { n: 0, last: "" };
+    byTask[p.task_id].n += 1;
+    if (p.day > byTask[p.task_id].last) byTask[p.task_id].last = p.day;
+  });
+
+  const taskRows = tasks
+    .map((x) => ({ task: x, ...(byTask[x.id] || { n: 0, last: "" }) }))
+    .sort((a, b) => b.n - a.n || a.task.title.localeCompare(b.task.title, lang));
+
+  const maxN = Math.max(...taskRows.map((r) => r.n), 1);
+
+  el("statsBody").innerHTML = `
+    <div class="statGrid">
+      <div class="stat">
+        <div class="statNum">${thisWeek.length}</div>
+        <div class="statLbl">${t("completedCount")} · ${t("thisWeek")}</div>
+      </div>
+      <div class="stat">
+        <div class="statNum">${weekDays}</div>
+        <div class="statLbl">${t("activeDays")}</div>
+      </div>
+      <div class="stat">
+        <div class="statNum">${bestWeek}</div>
+        <div class="statLbl">${t("bestStreakless")}</div>
+      </div>
+    </div>
+
+    <div class="sectionHead">${t("heatmapTitle")}</div>
+    <div class="heatWrap">
+      <div class="heatDays">${t("daysShort")
+        .map((d) => `<span>${d}</span>`)
+        .join("")}</div>
+      <div class="heat">${cells}</div>
+    </div>
+
+    <div class="sectionHead">${t("perTask")} · ${t("last4Weeks")}</div>
+    <ul class="taskStats">
+      ${taskRows
+        .map(
+          (r) => `
+        <li>
+          <div class="tsTop">
+            <span class="tsTitle" dir="auto">${esc(r.task.title)}</span>
+            <span class="tsN">${r.n ? t("timesDone", r.n) : t("neverDone")}</span>
+          </div>
+          <div class="tsBar"><span style="width:${(r.n / maxN) * 100}%"></span></div>
+        </li>`
+        )
+        .join("")}
+    </ul>`;
+}
+
+el("statsBack").addEventListener("click", (e) => {
+  e.preventDefault();
+  goBack();
+});
 
 function showLogin(showIt) {
   el("login").hidden = !showIt;
