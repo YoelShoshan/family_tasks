@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.3.1";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -129,7 +129,7 @@ async function renderHome() {
       return `
         <button class="card" data-person="${p.id}" style="--c:${p.color}">
           <div class="name" dir="auto">${esc(p.name)}</div>
-          <div class="count">${total ? `${done} / ${total}` : "—"}</div>
+          <div class="count ${total ? "" : "dim"}">${done} / ${total}</div>
           <div class="dots">${total ? dots : `<span class="unplanned">${t("notPlanned")}</span>`}</div>
         </button>`;
     })

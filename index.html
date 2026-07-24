@@ -67,17 +67,26 @@
   #home { display: grid; gap: 14px; padding: 6px 24px 32px; }
   .card {
     all: unset; cursor: pointer;
-    display: grid; grid-template-columns: 1fr auto; align-items: center;
-    column-gap: 20px; padding: 22px 26px; border-radius: 20px;
+    display: grid; grid-template-columns: 1fr auto;
+    grid-template-areas: "name count" "dots count";
+    align-items: center; column-gap: 20px;
+    padding: 22px 26px; border-radius: 20px;
     background: var(--panel); border-inline-start: 10px solid var(--c);
   }
   .card:active { background: var(--panel2); }
-  .name  { font-size: clamp(22px, 3.6vw, 36px); font-weight: 600; }
-  .count { grid-row: span 2; font-size: clamp(26px, 4.6vw, 46px); font-weight: 700;
-           font-variant-numeric: tabular-nums; color: var(--c); }
-  .dots  { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+  .name  { grid-area: name; font-size: clamp(22px, 3.6vw, 36px); font-weight: 600; }
+  .count {
+    grid-area: count; direction: ltr; /* keep "0 / 2" in reading order */
+    font-size: clamp(26px, 4.6vw, 46px); font-weight: 700;
+    font-variant-numeric: tabular-nums; color: var(--c);
+  }
+  .dots  {
+    grid-area: dots; display: flex; flex-wrap: wrap; gap: 7px;
+    margin-top: 8px; min-height: 13px;
+  }
   .dot   { width: 13px; height: 13px; border-radius: 50%; background: #2c3846; }
   .dot.on{ background: var(--c); }
+  .count.dim { color: var(--muted); opacity: .5; }
   .unplanned { font-size: 15px; color: var(--muted); font-style: italic; }
 
   /* ---------- shared top bar ---------- */
@@ -94,7 +103,7 @@
   .bar .btn:active { background: #232f3d; }
   .bar .grow { flex: 1; font-size: clamp(20px, 3vw, 30px); font-weight: 700; }
   #count { font-variant-numeric: tabular-nums; color: var(--c); font-weight: 700;
-           font-size: clamp(18px, 2.6vw, 26px); }
+           font-size: clamp(18px, 2.6vw, 26px); direction: ltr; }
 
   /* ---------- person board ---------- */
   #person, #manage { height: 100%; display: flex; flex-direction: column; }
