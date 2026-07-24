@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.7.0";
+const APP_VERSION = "0.8.0";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -391,8 +391,45 @@ function chime(isLast) {
   }
 }
 
+function spinCoin(li, isLast) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const box = li.getBoundingClientRect();
+  const size = isLast ? 132 : 88;
+
+  const coin = document.createElement("div");
+  coin.className = "coin" + (isLast ? " big" : "");
+  coin.style.left = `${box.left + box.width / 2}px`;
+  coin.style.top = `${box.top + box.height / 2}px`;
+  coin.style.setProperty("--size", `${size}px`);
+  const gid = "cg" + Math.random().toString(36).slice(2, 8);
+  coin.innerHTML = `
+    <div class="coinInner">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <radialGradient id="${gid}" cx="38%" cy="32%" r="72%">
+            <stop offset="0%" stop-color="#fff6cf"/>
+            <stop offset="45%" stop-color="#f7d044"/>
+            <stop offset="100%" stop-color="#c9930d"/>
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="47" fill="url(#${gid})" stroke="#a97a06" stroke-width="3"/>
+        <circle cx="50" cy="50" r="37" fill="none" stroke="#e0ad1c" stroke-width="2.5"/>
+        <path d="M50 26 l6.6 13.9 15.2 2.1 -11 10.9 2.7 15.2 -13.5-7.3 -13.5 7.3 2.7-15.2 -11-10.9 15.2-2.1z"
+              fill="#fff3c4" stroke="#b8860b" stroke-width="1.6" stroke-linejoin="round"/>
+      </svg>
+      <span class="shine"></span>
+    </div>`;
+
+  el("confetti").appendChild(coin);
+  coin.addEventListener("animationend", (e) => {
+    if (e.target === coin) coin.remove();
+  });
+}
+
 function celebrate(li, isLast) {
   chime(isLast);
+  spinCoin(li, isLast);
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
