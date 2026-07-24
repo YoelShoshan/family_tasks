@@ -149,6 +149,12 @@
   .avail .plus { font-size: 24px; color: var(--c); font-weight: 700; }
   .avail.added { opacity: .35; }
 
+  #version {
+    position: fixed; right: 8px; bottom: 6px; z-index: 3;
+    font-size: 11px; color: var(--muted); opacity: .4;
+    font-variant-numeric: tabular-nums; pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   :focus-visible { outline: 3px solid var(--c); outline-offset: 3px; }
 </style>
@@ -188,6 +194,8 @@
     <ul id="planList"></ul>
   </aside>
   <div id="scrim"></div>
+
+  <div id="version"></div>
 
   <script type="module" src="./app.js"></script>
 </body>

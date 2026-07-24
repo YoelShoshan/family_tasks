@@ -19,6 +19,8 @@ const sb = USE_LOCAL
 const store = USE_LOCAL ? new LocalStore() : new SupabaseStore(sb);
 window.store = store; // dev convenience
 
+const APP_VERSION = "0.1.0";
+
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
 const el = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -200,6 +202,8 @@ function showLogin(show) {
 }
 
 async function start() {
+  el("version").textContent = `v${APP_VERSION}${USE_LOCAL ? " · local" : ""}`;
+
   if (USE_LOCAL) {
     showLogin(false);
     route();
