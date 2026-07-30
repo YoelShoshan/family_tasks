@@ -4,7 +4,7 @@ import { SupabaseStore } from "./supabase-store.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { STRINGS, getLang, setLang, makeT } from "./i18n.js";
 
-const APP_VERSION = "0.10.0";
+const APP_VERSION = "0.10.1";
 
 const params = new URLSearchParams(location.search);
 const USE_LOCAL = params.has("local"); // ?local -> seeded localStorage, no Supabase
@@ -975,12 +975,12 @@ async function renderAverages(personId) {
   el("avgSortBtn").textContent = avgSortDesc ? t("sortDesc") : t("sortAsc");
 
   const end = today();
-  const weekFrom = addDays(end, -6);   // 7 days inclusive
-  const monthFrom = addDays(end, -29); // 30 days inclusive
+  const weekFrom = addDays(end, -6);    // last 7 days
+  const fourFrom = addDays(end, -27);   // last 28 days
 
   const [tasks, month] = await Promise.all([
     store.listTasks(personId),
-    store.listDayPlanRange(monthFrom, end, personId),
+    store.listDayPlanRange(fourFrom, end, personId),
   ]);
 
   const doneMonth = month.filter((p) => p.done_at);
@@ -992,33 +992,31 @@ async function renderAverages(personId) {
   }
   el("avgSortBtn").hidden = false;
 
-  const fmt = (n) => {
-    const r = Math.round(n * 100) / 100;
-    if (Number.isInteger(r)) return String(r);
-    return r.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-  };
+  const fmt = (n) =>
+    Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toFixed(1);
 
   const rows = tasks
     .map((tk) => {
-      const wk =
-        doneMonth.filter((p) => p.task_id === tk.id && p.day >= weekFrom).length / 7;
-      const mo = doneMonth.filter((p) => p.task_id === tk.id).length / 30;
-      return { title: tk.title, week: wk, month: mo };
+      const week = doneMonth.filter(
+        (p) => p.task_id === tk.id && p.day >= weekFrom
+      ).length;
+      const avg4 = doneMonth.filter((p) => p.task_id === tk.id).length / 4;
+      return { title: tk.title, week, avg4 };
     })
-    .filter((r) => r.week > 0 || r.month > 0);
+    .filter((r) => r.week > 0 || r.avg4 > 0);
 
   rows.sort((a, b) => {
-    const d = b.month - a.month || b.week - a.week;
+    const d = b.avg4 - a.avg4 || b.week - a.week;
     return avgSortDesc ? d : -d;
   });
 
-  const barMax = Math.max(...rows.map((r) => r.month), 0.01);
+  const barMax = Math.max(...rows.map((r) => r.avg4), 0.01);
 
   el("avgBody").innerHTML = `
     <div class="avgHead">
       <span class="avgColTask">${t("colTask")}</span>
       <span class="avgColNum">${t("colWeek")}</span>
-      <span class="avgColNum">${t("colMonth")}</span>
+      <span class="avgColNum">${t("colAvg4")}</span>
     </div>
     <ul class="avgList">
       ${rows
@@ -1026,15 +1024,15 @@ async function renderAverages(personId) {
           (r) => `
         <li class="avgRow">
           <span class="avgTask" dir="auto">${esc(r.title)}
-            <span class="avgTrack"><span style="width:${(r.month / barMax) * 100}%"></span></span>
+            <span class="avgTrack"><span style="width:${(r.avg4 / barMax) * 100}%"></span></span>
           </span>
-          <span class="avgNum">${fmt(r.week)}</span>
-          <span class="avgNum strong">${fmt(r.month)}</span>
+          <span class="avgNum">${r.week}</span>
+          <span class="avgNum strong">${fmt(r.avg4)}</span>
         </li>`
         )
         .join("")}
     </ul>
-    <p class="avgFoot">${t("perDay")}</p>`;
+    <p class="avgFoot">${t("avgFootNote")}</p>`;
 }
 
 el("avgSortBtn").addEventListener("click", () => {
